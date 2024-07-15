@@ -1,18 +1,25 @@
 import discord
 import asyncio
 from discord import app_commands
-from youtube_dl import YoutubeDL
+from yt_dlp import YoutubeDL
 from discord.ui import Button, View, Select
+from dotenv import load_dotenv
+import os
 
+load_dotenv()
 
 # Bot token
-TOKEN: str = 'NzExOTk2MzczMjg0ODE0OTcw.GJ4nTA.QIndw57L4Lp7tKE-KaS0o-MZi-jJQ6WncGZZK4'
+TOKEN: str = os.environ.get("DISCORD_TOKEN", "")
+
+FFMPEG: str = os.environ.get("FFMPEG", "")
 
 # Voicechannel ID
-VCCHANNEL_ID: int = 762036287137251389
+VCCHANEL_ID: int = int(os.environ.get("VCCHANEL_ID", ""))
+
+GUILD_ID: int = int(os.environ.get("GUILD_ID", ""))
 
 # URL of an .m3u8 file aka radio stream
-RADIO_API_URL = 'https://radio.stream.smcdn.pl/timeradio-p/3990-1.aac/playlist.m3u8'
+RADIO_API_URL = os.environ.get("RADIO_API_URL", "https://radio.stream.smcdn.pl/timeradio-p/3990-1.aac/playlist.m3u8")
 
 # FFMPEG option for streaming 
 FFMPEG_OPTIONS = {
@@ -24,7 +31,7 @@ YDL_OPTIONS = {
     'format': 'bestaudio/best',
     'extractaudio': True,
     'audioformat': 'mp3',
-    'outtmpl': '%(extractor)s-%(id)s-%(title)s.%(ext)s',
+    'outtmpl': '%(extractor)s-%(title)s.%(ext)s',
     'restrictfilenames': True,
     'noplaylist': True,
     'nocheckcertificate': True,
@@ -51,15 +58,15 @@ class Music(discord.Client):
         self.currently_playing = None
 
     async def setup_hook(self):
-        self.tree.copy_global_to(guild=discord.Object(id=613413309223272454))
-        print("Rozpoczęto synchronizację komend")
+        self.tree.copy_global_to(guild=discord.Object(id=GUILD_ID))
+        print("Command sync started")
         await self.tree.sync()
-        print("Zakończono synchronizację komend")
+        print("Command sync finished")
 
 
     async def join(self):
         if not self.voice:
-            self.voice = await client.get_channel(VCCHANNEL_ID).connect()
+            self.voice = await client.get_channel(VCCHANEL_ID).connect()
 
     async def search_for_songs(self, query):
         with YoutubeDL(YDL_OPTIONS) as ytdl:
@@ -75,7 +82,7 @@ class Music(discord.Client):
         if self.currently_playing or self.mode == "radio":
             self.voice.stop()
         self.mode = "radio"
-        source = discord.FFmpegPCMAudio(RADIO_API_URL, **FFMPEG_OPTIONS, executable="ffmpeg.exe")
+        source = discord.FFmpegPCMAudio(RADIO_API_URL, **FFMPEG_OPTIONS, executable=FFMPEG)
         self.voice.play(source)
 
     def play_yt(self):
@@ -88,7 +95,7 @@ class Music(discord.Client):
             return
         self.mode = "yt"
         self.currently_playing = self.queue.pop(0)
-        source = discord.FFmpegPCMAudio(self.currently_playing.url, **FFMPEG_OPTIONS, executable="ffmpeg.exe")
+        source = discord.FFmpegPCMAudio(self.currently_playing.url, **FFMPEG_OPTIONS, executable=FFMPEG)
         self.voice.play(source, after=lambda e: self.on_track_end())
 
     def skip(self):
@@ -126,14 +133,14 @@ async def play(interaction: discord.Interaction, query: str):
     songs = await client.search_for_songs(query)
     song = await client.selectSong(songs, interaction)
     if not song:
-        return await interaction.edit_original_response(content=f'Cholera wie gdzie tego szukać')
+        return await interaction.edit_original_response(content=f'Nie znaleziono')
     client.add_to_queue(song)
     await interaction.edit_original_response(content=f'Do kolejki leci utwór: {song.name}', view=None)
     await client.join()
     client.play_yt()
 
 
-@client.tree.command(name='skip', description="Pomiń to gówno raz dwa")
+@client.tree.command(name='skip', description="Pomiń to")
 async def skip(interaction: discord.Interaction):
     client.skip()
     await interaction.response.defer()
